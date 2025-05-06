@@ -1,0 +1,115 @@
+#include<iostream>
+#include<omp.h>
+#include<stack>
+#include<queue>
+#include<chrono>
+using namespace std;
+
+#define MAX 1000
+
+class Graph {
+public:
+    int V, E;
+    int adj[MAX][MAX] = {0};
+    bool visited[MAX] = {0};
+
+    void addEdge(int a, int b) {
+        adj[a][b] = adj[b][a] = 1;
+    }
+
+    void resetVisited() {
+        fill(visited, visited + V, false);
+    }
+
+    void printGraph() {
+        for (int i = 0; i < V; ++i) {
+            cout << i << " -> ";
+            for (int j = 0; j < V; ++j)
+                if (adj[i][j]) cout << j << " ";
+            cout << "\n";
+        }
+    }
+
+    void dfs(bool parallel = false) {
+        stack<int> s;
+        s.push(0); visited[0] = true;
+
+        while (!s.empty()) {
+            int u = s.top(); s.pop();
+            cout << u << " ";
+
+            if (parallel) {
+                #pragma omp parallel for
+                for (int v = 0; v < V; v++) {
+                    if (adj[u][v] && !visited[v]) {
+                        #pragma omp critical
+                        { s.push(v); visited[v] = true; }
+                    }
+                }
+            } else {
+                for (int v = 0; v < V; v++) {
+                    if (adj[u][v] && !visited[v]) {
+                        s.push(v); visited[v] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    void bfs(bool parallel = false) {
+        queue<int> q;
+        q.push(0); visited[0] = true;
+
+        while (!q.empty()) {
+            int u = q.front(); q.pop();
+            cout << u << " ";
+
+            if (parallel) {
+                #pragma omp parallel for
+                for (int v = 0; v < V; v++) {
+                    if (adj[u][v] && !visited[v]) {
+                        #pragma omp critical
+                        { q.push(v); visited[v] = true; }
+                    }
+                }
+            } else {
+                for (int v = 0; v < V; v++) {
+                    if (adj[u][v] && !visited[v]) {
+                        q.push(v); visited[v] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    void timedTraversal(void (Graph::*method)(bool), const string& name, bool parallel = false) {
+        resetVisited();
+        cout << "\n" << name << (parallel ? " (Parallel):\n" : ":\n");
+        auto start = chrono::high_resolution_clock::now();
+        (this->*method)(parallel);
+        auto end = chrono::high_resolution_clock::now();
+        cout << "\nTime: " << chrono::duration_cast<chrono::microseconds>(end - start).count() << " µs\n";
+    }
+};
+
+int main() {
+    Graph g;
+    cout << "Enter vertices and edges: ";
+    cin >> g.V >> g.E;
+
+    for (int i = 0, a, b; i < g.E; ++i) {
+        cout << "Edge " << i+1 << ": ";
+        cin >> a >> b;
+        g.addEdge(a, b);
+    }
+
+    cout << "\nAdjacency Matrix:\n";
+    g.printGraph();
+
+    g.timedTraversal(&Graph::dfs, "DFS");
+    g.timedTraversal(&Graph::dfs, "DFS", true);
+    g.timedTraversal(&Graph::bfs, "BFS");
+    g.timedTraversal(&Graph::bfs, "BFS", true);
+
+    return 0;
+}
